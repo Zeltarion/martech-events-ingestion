@@ -1,0 +1,92 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mei-postgres
+    environment:
+      POSTGRES_DB: martech_events
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d martech_events"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nats:
+    image: nats:2.11-alpine
+    container_name: mei-nats
+    command: ["-js"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mei-api
+    command: ["node", "dist/entrypoints/api.main.js"]
+    env_file:
+      - .env.example
+    environment:
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mei-worker
+    command: ["node", "dist/entrypoints/worker.main.js"]
+    env_file:
+      - .env.example
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  reports:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mei-reports
+    command: ["node", "dist/entrypoints/reports.main.js"]
+    env_file:
+      - .env.example
+    environment:
+      REPORTS_PORT: 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  publisher:
+    image: andriiuni/events:latest
+    container_name: mei-publisher
+    environment:
+      EVENT_ENDPOINT: http://api:3000/webhook
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres_data:
