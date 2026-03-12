@@ -1,0 +1,264 @@
+# MarTech Event Pipeline
+
+NestJS, NATS JetStream, PostgreSQL, TypeORM, Docker Compose.
+
+This repository implements a production-minded event-driven backend system that ingests webhook events, buffers them through NATS JetStream for reliable asynchronous delivery, persists them into PostgreSQL, and exposes reporting APIs for analytics.
+
+The full infrastructure is intended to start with a single command:
+
+```bash
+docker-compose up
+```
+
+## Overview
+
+Event source: the Dockerized publisher image `andriiuni/events` continuously sends JSON events via HTTP POST to the webhook endpoint exposed by the API service.
+
+Flow:
+
+```text
+publisher -> POST /webhook
+          -> API validates and publishes to NATS JetStream (events.ingest.v1)
+          -> Worker consumes, deduplicates, and persists to PostgreSQL
+          -> Reports API queries PostgreSQL and exposes analytics endpoints
+```
+
+Key properties:
+
+- Reliability: JetStream durable delivery plus ack after DB commit plus DB-level deduplication.
+- Scalability: API and Worker run as separate processes or containers and can be scaled independently.
+- Observability: structured logs plus liveness and readiness health checks.
+- Maintainability: modular monolith structure with clear boundaries and versioned contracts.
+
+## Burst Handling
+
+The system is designed to absorb short bursts of a few thousand events per minute without pushing synchronous write pressure onto the webhook endpoint.
+
+The API returns quickly after validation and publish, while NATS JetStream buffers burst traffic and the Worker drains it asynchronously into PostgreSQL.
+
+This MVP relies on queue-based decoupling and separate API and Worker processes as the primary burst-handling strategy. If sustained load requires it later, the design leaves room for controlled concurrency, batch inserts, and consumer tuning.
+
+## Architecture
+
+This is a modular monolith with separate entrypoints for API, Worker, and Reports. It runs as multiple containers from the same image, which keeps the MVP small while preserving clean seams for future extraction or independent scaling.
+
+```text
+publisher (HTTP)
+   |
+   v
+api: /webhook
+   |
+   v
+NATS JetStream (events.ingest.v1)
+   |
+   v
+worker (durable consumer)
+   |
+   v
+PostgreSQL (raw_events)
+   |
+   v
+reports API (/reports/*)
+```
+
+## Services And Run Modes
+
+The same codebase is started via different entrypoints:
+
+- API: receives webhooks and publishes to NATS  
+  `node dist/entrypoints/api.main.js`
+- Worker: consumes from JetStream and writes to PostgreSQL  
+  `node dist/entrypoints/worker.main.js`
+- Reports: serves reporting endpoints  
+  `node dist/entrypoints/reports.main.js`
+
+In `docker-compose`, these run as separate containers from the same image.
+
+## Delivery Semantics
+
+The system uses NATS JetStream for durable asynchronous delivery.
+
+- Stream: `EVENTS`
+- Subject: `events.ingest.v1`
+- Consumer: durable, for example `events-db-writer-v1`
+- Semantics: at-least-once delivery
+- Idempotency: PostgreSQL dedup via `UNIQUE(event_id)` plus `INSERT ... ON CONFLICT DO NOTHING`
+
+Result: effectively-once persistence, built from at-least-once transport plus idempotent writes.
+
+## Duplicates And Out-Of-Order Events
+
+Duplicates are expected and handled by a unique constraint on `event_id`.
+
+Out-of-order events are expected and handled by storing the original event timestamp as `occurred_at` and building reports against event time rather than ingestion order.
+
+## Data Model
+
+Primary table: `raw_events`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` | Primary key |
+| `event_id` | `text` | Unique source event id |
+| `occurred_at` | `timestamptz` | Parsed from event timestamp |
+| `source` | `text` | `facebook` or `tiktok` |
+| `funnel_stage` | `text` | `top` or `bottom` |
+| `event_type` | `text` | Event type from the contract |
+| `user_id` | `text` | Extracted from payload |
+| `country` | `text` | Extracted country, nullable |
+| `payload` | `jsonb` | Full raw event |
+| `ingested_at` | `timestamptz` | Default `now()` |
+
+Recommended indexes:
+
+- `UNIQUE(event_id)`
+- `(occurred_at)`
+- `(source, occurred_at)`
+- `(event_type, occurred_at)`
+- `(country, occurred_at)` if geo reports justify it
+
+## API Endpoints
+
+### Ingestion
+
+`POST /webhook`
+
+Receives events from `andriiuni/events`, validates them, and publishes them to `events.ingest.v1`.
+
+- Success: `202 Accepted`
+- Invalid payload: `400 Bad Request`
+
+### Reporting
+
+All reporting endpoints support `from` and `to` in ISO format and optional filters where relevant.
+
+`GET /reports/funnel?from=&to=&source=`
+
+Returns funnel conversion summary.
+
+Example:
+
+```json
+{
+  "from": "2026-03-01T00:00:00Z",
+  "to": "2026-03-02T00:00:00Z",
+  "source": "facebook",
+  "topCount": 1234,
+  "bottomCount": 321,
+  "conversionRate": 0.26
+}
+```
+
+`GET /reports/countries?from=&to=&source=&limit=10`
+
+Returns top countries by event count and unique users.
+
+Example:
+
+```json
+{
+  "items": [
+    { "country": "US", "eventsCount": 1200, "uniqueUsers": 340 },
+    { "country": "GB", "eventsCount": 900, "uniqueUsers": 250 }
+  ]
+}
+```
+
+`GET /reports/revenue?from=&to=&groupBy=day`
+
+Returns revenue aggregation from events that include `purchaseAmount`.
+
+For MVP, numeric string values are aggregated, `null` is ignored, and invalid values must not break report generation. The exact parsing rule should be documented in code and kept deterministic.
+
+Example:
+
+```json
+{
+  "groupBy": "day",
+  "items": [
+    { "bucket": "2026-03-01", "revenue": "1523.50" },
+    { "bucket": "2026-03-02", "revenue": "892.10" }
+  ],
+  "totalRevenue": "2415.60"
+}
+```
+
+## Health Checks
+
+- `GET /health/liveness`: process is running
+- `GET /health/readiness`: verifies required dependencies such as PostgreSQL and NATS connectivity
+
+## Observability
+
+- Structured logs in JSON
+- Correlation-friendly fields such as `eventId`, `source`, `subject`, `deliveries`, and `consumer`
+- Health checks for orchestration and monitoring
+- Optional metrics endpoint later if needed
+
+## Running Locally
+
+1. Start everything:
+
+```bash
+docker-compose up --build
+```
+
+2. Verify health:
+
+```bash
+curl -s http://localhost:3000/health/liveness
+curl -s http://localhost:3000/health/readiness
+```
+
+3. Call reports:
+
+```bash
+curl -s "http://localhost:3000/reports/funnel?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z"
+curl -s "http://localhost:3000/reports/countries?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z&limit=10"
+```
+
+## Project Structure
+
+```text
+src/
+  entrypoints/
+    api.main.ts
+    worker.main.ts
+    reports.main.ts
+
+  apps/
+    api.app.module.ts
+    worker.app.module.ts
+    reports.app.module.ts
+
+  contracts/
+    v1/
+      event.types.ts
+      event.schema.ts
+      index.ts
+
+  ingestion/
+  messaging/
+  persistence/
+  worker/
+  reports/
+  health/
+  observability/
+```
+
+## Why This Design
+
+- Modular monolith keeps complexity under control while preserving clean boundaries.
+- Separate entrypoints allow API, Worker, and Reports to run independently.
+- NATS JetStream provides durable buffering and smooth burst handling.
+- PostgreSQL dedup provides correctness under at-least-once delivery.
+- Versioned contracts in `contracts/v1` make future schema evolution safer.
+
+## Event Contract
+
+See `src/contracts/v1` for:
+
+- TypeScript types
+- Runtime validation schema
+
+The publisher may send duplicates and out-of-order events, and the system is designed to handle both.
