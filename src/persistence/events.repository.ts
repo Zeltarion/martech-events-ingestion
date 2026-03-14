@@ -16,6 +16,20 @@ interface RawEventInsertModel {
   payload: Record<string, unknown>;
 }
 
+export interface ReportFilters {
+  from: string;
+  to: string;
+  source?: Event["source"];
+}
+
+export interface CountriesReportFilters extends ReportFilters {
+  limit: number;
+}
+
+export interface RevenueReportFilters extends ReportFilters {
+  groupBy: "day" | "hour";
+}
+
 @Injectable()
 export class EventsRepository {
   public constructor(
@@ -54,6 +68,97 @@ export class EventsRepository {
     );
 
     return Array.isArray(insertResult) && insertResult.length > 0;
+  }
+
+  public async getFunnelReport(filters: ReportFilters): Promise<{
+    topCount: number;
+    bottomCount: number;
+  }> {
+    const [row] = await this.rawEventRepository.query(
+      `
+        SELECT
+          COUNT(*) FILTER (WHERE funnel_stage = 'top')::int AS "topCount",
+          COUNT(*) FILTER (WHERE funnel_stage = 'bottom')::int AS "bottomCount"
+        FROM raw_events
+        WHERE occurred_at >= $1
+          AND occurred_at < $2
+          AND ($3::text IS NULL OR source = $3)
+      `,
+      [filters.from, filters.to, filters.source ?? null]
+    );
+
+    return {
+      topCount: Number(row?.topCount ?? 0),
+      bottomCount: Number(row?.bottomCount ?? 0)
+    };
+  }
+
+  public async getCountriesReport(filters: CountriesReportFilters): Promise<
+    Array<{ country: string; eventsCount: number; uniqueUsers: number }>
+  > {
+    const rows = await this.rawEventRepository.query(
+      `
+        SELECT
+          country,
+          COUNT(*)::int AS "eventsCount",
+          COUNT(DISTINCT user_id)::int AS "uniqueUsers"
+        FROM raw_events
+        WHERE occurred_at >= $1
+          AND occurred_at < $2
+          AND ($3::text IS NULL OR source = $3)
+          AND country IS NOT NULL
+        GROUP BY country
+        ORDER BY COUNT(*) DESC, country ASC
+        LIMIT $4
+      `,
+      [filters.from, filters.to, filters.source ?? null, filters.limit]
+    );
+
+    return rows.map((row: Record<string, unknown>) => ({
+      country: String(row.country),
+      eventsCount: Number(row.eventsCount),
+      uniqueUsers: Number(row.uniqueUsers)
+    }));
+  }
+
+  public async getRevenueReport(filters: RevenueReportFilters): Promise<
+    Array<{ bucket: string; revenue: string }>
+  > {
+    const bucketPrecision = filters.groupBy;
+    const bucketFormat =
+      filters.groupBy === "day"
+        ? "YYYY-MM-DD"
+        : "YYYY-MM-DD\"T\"HH24:00:00\"Z\"";
+    const rows = await this.rawEventRepository.query(
+      `
+        WITH revenue_events AS (
+          SELECT
+            date_trunc('${bucketPrecision}', occurred_at AT TIME ZONE 'UTC') AS bucket,
+            CASE
+              WHEN payload #>> '{data,engagement,purchaseAmount}' ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN (payload #>> '{data,engagement,purchaseAmount}')::numeric
+              ELSE NULL
+            END AS revenue_amount
+          FROM raw_events
+          WHERE occurred_at >= $1
+            AND occurred_at < $2
+            AND ($3::text IS NULL OR source = $3)
+        )
+        SELECT
+          to_char(bucket, '${bucketFormat}') AS bucket,
+          COALESCE(SUM(revenue_amount), 0)::text AS revenue
+        FROM revenue_events
+        WHERE revenue_amount IS NOT NULL
+        GROUP BY bucket
+        ORDER BY bucket ASC
+      `,
+      [filters.from, filters.to, filters.source ?? null]
+    );
+
+    return rows.map((row: Record<string, unknown>) => ({
+      bucket: String(row.bucket),
+      revenue: String(row.revenue)
+    }));
   }
 
   private mapEventToInsertModel(event: Event): RawEventInsertModel {

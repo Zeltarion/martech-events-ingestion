@@ -46,7 +46,7 @@ This is a modular monolith with separate entrypoints for API, Worker, and Report
 publisher (HTTP)
    |
    v
-api: /webhook
+api: POST /webhook
    |
    v
 NATS JetStream (events.ingest.v1)
@@ -58,7 +58,7 @@ worker (durable consumer)
 PostgreSQL (raw_events)
    |
    v
-reports API (/reports/*)
+reports API (GET /reports/*)
 ```
 
 ## Services And Run Modes
@@ -69,7 +69,7 @@ The same codebase is started via different entrypoints:
   `node dist/entrypoints/api.main.js`
 - Worker: consumes from JetStream and writes to PostgreSQL  
   `node dist/entrypoints/worker.main.js`
-- Reports: serves reporting endpoints  
+- Reports: serves `GET /reports/*` endpoints  
   `node dist/entrypoints/reports.main.js`
 
 In `docker-compose`, these run as separate containers from the same image.
@@ -213,8 +213,9 @@ curl -s http://localhost:3000/health/readiness
 3. Call reports:
 
 ```bash
-curl -s "http://localhost:3000/reports/funnel?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z"
-curl -s "http://localhost:3000/reports/countries?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z&limit=10"
+curl -s "http://localhost:3001/reports/funnel?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z"
+curl -s "http://localhost:3001/reports/countries?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z&limit=10"
+curl -s "http://localhost:3001/reports/revenue?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z&groupBy=day"
 ```
 
 ## Development Note
