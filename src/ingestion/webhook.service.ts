@@ -1,40 +1,37 @@
 import { Injectable, Logger } from "@nestjs/common";
 
+import { EventBatchSchema, EventSchema, IngestionPayloadSchema, isEventBatchPayload } from "../contracts/v1";
+
 @Injectable()
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
 
-  public recordIncomingPayload(payload: unknown): void {
+  public recordIncomingPayload(payload: IngestionPayloadSchema): void {
     const summary = this.describePayload(payload);
 
     this.logger.log(`Received webhook payload: ${summary}`);
   }
 
-  private describePayload(payload: unknown): string {
-    if (Array.isArray(payload)) {
+  private describePayload(payload: IngestionPayloadSchema): string {
+    if (isEventBatchPayload(payload)) {
       return this.describeBatchPayload(payload);
     }
 
     return this.describeSinglePayload(payload);
   }
 
-  private describeBatchPayload(payload: unknown[]): string {
+  private describeBatchPayload(payload: EventBatchSchema): string {
     const firstItem = payload[0];
     const firstSummary = this.describeSinglePayload(firstItem);
 
     return `batch size=${payload.length} first={${firstSummary}}`;
   }
 
-  private describeSinglePayload(payload: unknown): string {
-    if (!payload || typeof payload !== "object") {
-      return "non-object payload";
-    }
-
-    const candidate = payload as Record<string, unknown>;
-    const eventId = typeof candidate.eventId === "string" ? candidate.eventId : "unknown";
-    const source = typeof candidate.source === "string" ? candidate.source : "unknown";
-    const eventType = typeof candidate.eventType === "string" ? candidate.eventType : "unknown";
-    const keys = Object.keys(candidate).slice(0, 8).join(",");
+  private describeSinglePayload(payload: EventSchema): string {
+    const eventId = payload.eventId;
+    const source = payload.source;
+    const eventType = payload.eventType;
+    const keys = Object.keys(payload).slice(0, 8).join(",");
 
     return `eventId=${eventId} source=${source} eventType=${eventType} keys=[${keys}]`;
   }

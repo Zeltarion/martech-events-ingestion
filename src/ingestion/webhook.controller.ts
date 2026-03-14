@@ -1,5 +1,6 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
 
+import { validateIngestionPayload } from "../contracts/v1";
 import { WebhookService } from "./webhook.service";
 
 @Controller("webhook")
@@ -9,7 +10,13 @@ export class WebhookController {
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
   public handleWebhook(@Body() payload: unknown): { accepted: true } {
-    this.webhookService.recordIncomingPayload(payload);
+    try {
+      const validatedPayload = validateIngestionPayload(payload);
+
+      this.webhookService.recordIncomingPayload(validatedPayload);
+    } catch (error) {
+      throw new BadRequestException("Invalid publisher payload");
+    }
 
     return { accepted: true };
   }
