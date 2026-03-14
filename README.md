@@ -186,12 +186,12 @@ Example:
 ## Health Checks
 
 - `GET /health/liveness`: process is running
-- `GET /health/readiness`: verifies required dependencies such as PostgreSQL and NATS connectivity
+- `GET /health/readiness`: verifies PostgreSQL and NATS connectivity and returns `503 Service Unavailable` when a required dependency is down
 
 ## Observability
 
-- Structured logs in JSON
-- Correlation-friendly fields such as `eventId`, `source`, `subject`, `deliveries`, and `consumer`
+- Consistent Nest logger output across API, Worker, and Reports entrypoints
+- Key operational fields in log messages such as `eventId`, `source`, `subject`, `redelivery`, and `consumer`
 - Health checks for orchestration and monitoring
 - Optional metrics endpoint later if needed
 
