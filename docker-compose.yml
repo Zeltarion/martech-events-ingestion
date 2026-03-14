@@ -29,6 +29,18 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mei-migrate
+    command: ["sh", "-c", "npm run migration:run:compiled"]
+    env_file:
+      - .env.example
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -40,6 +52,8 @@ services:
     environment:
       PORT: 3000
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       nats:
@@ -56,6 +70,8 @@ services:
     env_file:
       - .env.example
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       nats:
@@ -72,6 +88,8 @@ services:
     environment:
       REPORTS_PORT: 3001
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       nats:

@@ -9,11 +9,11 @@ export class WebhookController {
 
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
-  public handleWebhook(@Body() payload: unknown): { accepted: true } {
+  public async handleWebhook(@Body() payload: unknown): Promise<{ accepted: true }> {
     try {
       const validatedPayload = validateIngestionPayload(payload);
 
-      this.webhookService.recordIncomingPayload(validatedPayload);
+      await this.webhookService.recordIncomingPayload(validatedPayload);
     } catch (error) {
       throw new BadRequestException("Invalid publisher payload");
     }
