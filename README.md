@@ -217,6 +217,26 @@ curl -s "http://localhost:3000/reports/funnel?from=2026-03-01T00:00:00Z&to=2026-
 curl -s "http://localhost:3000/reports/countries?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z&limit=10"
 ```
 
+## Development Note
+
+The publisher emits a continuous high-volume stream and can fill the development database quickly.
+
+Recommended workflow:
+
+1. Start the full stack and verify the end-to-end flow.
+2. Confirm that webhook ingest, JetStream delivery, worker persistence, and Postgres writes all work.
+3. Stop the publisher while continuing development:
+
+```bash
+docker compose stop publisher
+```
+
+When another end-to-end verification pass is needed, start it again:
+
+```bash
+docker compose start publisher
+```
+
 ## Project Structure
 
 ```text

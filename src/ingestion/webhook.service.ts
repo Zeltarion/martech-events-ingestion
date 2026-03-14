@@ -1,15 +1,31 @@
 import { Injectable, Logger } from "@nestjs/common";
 
 import { EventBatchSchema, EventSchema, IngestionPayloadSchema, isEventBatchPayload } from "../contracts/v1";
+import { ConfigService } from "@nestjs/config";
+import { AppConfig } from "../config/configuration";
+import { NatsService } from "../messaging/nats.service";
 
 @Injectable()
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
 
-  public recordIncomingPayload(payload: IngestionPayloadSchema): void {
+  public constructor(
+    private readonly natsService: NatsService,
+    private readonly configService: ConfigService<{ app: AppConfig }, true>
+  ) {}
+
+  public async recordIncomingPayload(payload: IngestionPayloadSchema): Promise<void> {
     const summary = this.describePayload(payload);
+    const appConfig = this.configService.getOrThrow("app");
 
     this.logger.log(`Received webhook payload: ${summary}`);
+
+    const events = isEventBatchPayload(payload) ? payload : [payload];
+    const subject = appConfig.natsIngestSubject;
+
+    for (const event of events) {
+      await this.natsService.publishEvent(subject, event);
+    }
   }
 
   private describePayload(payload: IngestionPayloadSchema): string {
