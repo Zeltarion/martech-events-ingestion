@@ -162,39 +162,47 @@ export class EventsRepository {
   }
 
   private mapEventToInsertModel(event: Event): RawEventInsertModel {
-    return {
-      eventId: event.eventId,
-      occurredAt: new Date(event.timestamp),
-      source: event.source,
-      funnelStage: event.funnelStage,
-      eventType: event.eventType,
-      userId: event.data.user.userId,
-      country: this.extractCountry(event),
-      payload: event as unknown as Record<string, unknown>
-    };
+    return mapEventToInsertModel(event);
   }
 
   private extractCountry(event: Event): string | null {
-    if (event.source === "facebook") {
-      return event.data.user.location.country;
-    }
+    return extractCountry(event);
+  }
+}
 
-    if (event.source === "tiktok") {
-      return this.extractTiktokCountry(event);
-    }
+export function mapEventToInsertModel(event: Event): RawEventInsertModel {
+  return {
+    eventId: event.eventId,
+    occurredAt: new Date(event.timestamp),
+    source: event.source,
+    funnelStage: event.funnelStage,
+    eventType: event.eventType,
+    userId: event.data.user.userId,
+    country: extractCountry(event),
+    payload: event as unknown as Record<string, unknown>
+  };
+}
 
+function extractCountry(event: Event): string | null {
+  if (event.source === "facebook") {
+    return event.data.user.location.country;
+  }
+
+  if (event.source === "tiktok") {
+    return extractTiktokCountry(event);
+  }
+
+  return null;
+}
+
+function extractTiktokCountry(event: Extract<Event, { source: "tiktok" }>): string | null {
+  if (event.funnelStage !== "top") {
     return null;
   }
 
-  private extractTiktokCountry(event: Extract<Event, { source: "tiktok" }>): string | null {
-    if (event.funnelStage !== "top") {
-      return null;
-    }
-
-    if (!("country" in event.data.engagement)) {
-      return null;
-    }
-
-    return event.data.engagement.country;
+  if (!("country" in event.data.engagement)) {
+    return null;
   }
+
+  return event.data.engagement.country;
 }
