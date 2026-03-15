@@ -13,6 +13,7 @@ interface RawEventInsertModel {
   eventType: string;
   userId: string;
   country: string | null;
+  purchaseAmount: string | null;
   payload: Record<string, unknown>;
 }
 
@@ -118,11 +119,7 @@ export class EventsRepository {
         WITH revenue_events AS (
           SELECT
             date_trunc('${bucketPrecision}', occurred_at AT TIME ZONE 'UTC') AS bucket,
-            CASE
-              WHEN payload #>> '{data,engagement,purchaseAmount}' ~ '^[0-9]+(\\.[0-9]+)?$'
-                THEN (payload #>> '{data,engagement,purchaseAmount}')::numeric
-              ELSE NULL
-            END AS revenue_amount
+            purchase_amount AS revenue_amount
           FROM raw_events
           WHERE occurred_at >= $1
             AND occurred_at < $2
@@ -160,7 +157,7 @@ export class EventsRepository {
 
     const values: unknown[] = [];
     const placeholders = models.map((model, index) => {
-      const offset = index * 8;
+      const offset = index * 9;
 
       values.push(
         model.eventId,
@@ -170,10 +167,11 @@ export class EventsRepository {
         model.eventType,
         model.userId,
         model.country,
+        model.purchaseAmount,
         JSON.stringify(model.payload)
       );
 
-      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}::jsonb)`;
+      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}::jsonb)`;
     });
 
     const insertResult = await this.rawEventRepository.query(
@@ -186,6 +184,7 @@ export class EventsRepository {
           event_type,
           user_id,
           country,
+          purchase_amount,
           payload
         )
         VALUES ${placeholders.join(", ")}
@@ -212,6 +211,7 @@ export function mapEventToInsertModel(event: Event): RawEventInsertModel {
     eventType: event.eventType,
     userId: event.data.user.userId,
     country: extractCountry(event),
+    purchaseAmount: extractPurchaseAmount(event),
     payload: event as unknown as Record<string, unknown>
   };
 }
@@ -250,4 +250,18 @@ function deduplicateInsertModels(models: RawEventInsertModel[]): RawEventInsertM
   }
 
   return Array.from(uniqueModels.values());
+}
+
+export function extractPurchaseAmount(event: Event): string | null {
+  if (!("purchaseAmount" in event.data.engagement)) {
+    return null;
+  }
+
+  const { purchaseAmount } = event.data.engagement;
+
+  if (typeof purchaseAmount !== "string") {
+    return null;
+  }
+
+  return /^[0-9]+(\.[0-9]+)?$/.test(purchaseAmount) ? purchaseAmount : null;
 }

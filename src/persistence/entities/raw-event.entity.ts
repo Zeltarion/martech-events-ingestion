@@ -11,6 +11,9 @@ import {
 @Index("idx_raw_events_source_occurred_at", ["source", "occurredAt"])
 @Index("idx_raw_events_event_type_occurred_at", ["eventType", "occurredAt"])
 @Index("idx_raw_events_country_occurred_at", ["country", "occurredAt"])
+@Index("idx_raw_events_revenue_source_occurred_at", ["source", "occurredAt"], {
+  where: "\"purchase_amount\" IS NOT NULL"
+})
 export class RawEventEntity {
   @PrimaryGeneratedColumn({ type: "bigint" })
   public id!: string;
@@ -35,6 +38,9 @@ export class RawEventEntity {
 
   @Column({ type: "text", nullable: true })
   public country!: string | null;
+
+  @Column({ name: "purchase_amount", type: "numeric", nullable: true })
+  public purchaseAmount!: string | null;
 
   @Column({ type: "jsonb" })
   public payload!: Record<string, unknown>;
