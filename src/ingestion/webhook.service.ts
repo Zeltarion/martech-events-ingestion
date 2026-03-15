@@ -5,6 +5,7 @@ import { ConfigService } from "@nestjs/config";
 import { AppConfig } from "../config/configuration";
 import { runWithConcurrency } from "../common/run-with-concurrency";
 import { NatsService } from "../messaging/nats.service";
+import { MetricsService } from "../observability/metrics.service";
 
 @Injectable()
 export class WebhookService {
@@ -12,25 +13,34 @@ export class WebhookService {
 
   public constructor(
     private readonly natsService: NatsService,
-    private readonly configService: ConfigService<{ app: AppConfig }, true>
+    private readonly configService: ConfigService<{ app: AppConfig }, true>,
+    private readonly metricsService: MetricsService
   ) {}
 
-  public async recordIncomingPayload(payload: IngestionPayloadSchema): Promise<void> {
+  public async recordIncomingPayload(payload: IngestionPayloadSchema, requestId: string): Promise<void> {
     const summary = this.describePayload(payload);
     const appConfig = this.configService.getOrThrow("app");
 
-    this.logger.log(`Received webhook payload: ${summary}`);
+    this.logger.log(`Received webhook payload: requestId=${requestId} ${summary}`);
 
     const events = isEventBatchPayload(payload) ? payload : [payload];
     const subject = appConfig.natsIngestSubject;
     const startedAt = Date.now();
 
-    await runWithConcurrency(events, appConfig.webhookPublishConcurrency, async (event) => {
-      await this.natsService.publishEvent(subject, event);
-    });
+    try {
+      await runWithConcurrency(events, appConfig.webhookPublishConcurrency, async (event) => {
+        await this.natsService.publishEvent(subject, event, { requestId });
+      });
+    } catch (error) {
+      this.metricsService.recordWebhookPublishFailure();
+      throw error;
+    }
+
+    const durationMs = Date.now() - startedAt;
+    this.metricsService.recordWebhookRequest(events.length, durationMs);
 
     this.logger.log(
-      `Published batch size=${events.length} subject=${subject} concurrency=${appConfig.webhookPublishConcurrency} durationMs=${Date.now() - startedAt}`
+      `Published batch requestId=${requestId} size=${events.length} subject=${subject} concurrency=${appConfig.webhookPublishConcurrency} durationMs=${durationMs}`
     );
   }
 

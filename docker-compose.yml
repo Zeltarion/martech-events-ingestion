@@ -69,6 +69,8 @@ services:
     command: ["node", "dist/entrypoints/worker.main.js"]
     env_file:
       - .env.example
+    environment:
+      WORKER_PORT: 3002
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -76,6 +78,8 @@ services:
         condition: service_healthy
       nats:
         condition: service_healthy
+    ports:
+      - "3002:3002"
 
   reports:
     build:
@@ -97,6 +101,40 @@ services:
     ports:
       - "3001:3001"
 
+  prometheus:
+    image: prom/prometheus:v3.3.0
+    container_name: mei-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      api:
+        condition: service_started
+      worker:
+        condition: service_started
+      reports:
+        condition: service_started
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.6.1
+    container_name: mei-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    ports:
+      - "3003:3000"
+
   publisher:
     image: andriiuni/events:latest
     container_name: mei-publisher
@@ -108,3 +146,4 @@ services:
 
 volumes:
   postgres_data:
+  prometheus_data:

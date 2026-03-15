@@ -1,6 +1,7 @@
 export interface AppConfig {
   nodeEnv: string;
   port: number;
+  workerPort: number;
   reportsPort: number;
   databaseUrl: string;
   natsUrl: string;
@@ -31,6 +32,7 @@ export default (): { app: AppConfig } => ({
   app: {
     nodeEnv: process.env.NODE_ENV ?? "development",
     port: getNumber(process.env.PORT, 3000),
+    workerPort: getNumber(process.env.WORKER_PORT, 3002),
     reportsPort: getNumber(process.env.REPORTS_PORT, 3001),
     databaseUrl: process.env.DATABASE_URL as string,
     natsUrl: process.env.NATS_URL as string,

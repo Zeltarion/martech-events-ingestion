@@ -7,6 +7,7 @@ import { Event, validateIngestionPayload } from "../contracts/v1";
 import { AppConfig } from "../config/configuration";
 import { NatsService } from "../messaging/nats.service";
 import { StreamBootstrapService } from "../messaging/stream.bootstrap";
+import { MetricsService } from "../observability/metrics.service";
 import { EventsRepository } from "../persistence/events.repository";
 
 interface PendingMessage {
@@ -25,7 +26,8 @@ export class ConsumerService implements OnModuleInit {
     private readonly natsService: NatsService,
     private readonly streamBootstrapService: StreamBootstrapService,
     private readonly eventsRepository: EventsRepository,
-    private readonly configService: ConfigService<{ app: AppConfig }, true>
+    private readonly configService: ConfigService<{ app: AppConfig }, true>,
+    private readonly metricsService: MetricsService
   ) {}
 
   public async onModuleInit(): Promise<void> {
@@ -118,13 +120,20 @@ export class ConsumerService implements OnModuleInit {
   }
 
   private async processBatch(batch: PendingMessage[]): Promise<void> {
+    const startedAt = Date.now();
     const insertedEventIds = await this.eventsRepository.insertEvents(batch.map((item) => item.event));
+    this.metricsService.recordWorkerBatch(
+      batch.length,
+      insertedEventIds.size,
+      Date.now() - startedAt
+    );
 
     for (const item of batch) {
       item.message.ack();
+      const requestId = item.message.headers?.get("x-request-id") ?? "unknown";
 
       this.logger.log(
-        `Persisted eventId=${item.event.eventId} inserted=${insertedEventIds.has(item.event.eventId)} redelivery=${item.message.info.redeliveryCount}`
+        `Persisted requestId=${requestId} eventId=${item.event.eventId} inserted=${insertedEventIds.has(item.event.eventId)} redelivery=${item.message.info.redeliveryCount}`
       );
     }
   }

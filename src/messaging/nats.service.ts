@@ -4,6 +4,7 @@ import {
   AckPolicy,
   connect,
   consumerOpts,
+  headers,
   JetStreamClient,
   JetStreamManager,
   NatsConnection,
@@ -24,11 +25,17 @@ export class NatsService implements OnModuleDestroy {
 
   public constructor(private readonly configService: ConfigService<{ app: AppConfig }, true>) {}
 
-  public async publishEvent(subject: string, event: Event): Promise<void> {
+  public async publishEvent(subject: string, event: Event, metadata?: { requestId?: string }): Promise<void> {
     const jetStream = await this.getJetStreamClient();
+    const natsHeaders = headers();
+
+    if (metadata?.requestId) {
+      natsHeaders.set("x-request-id", metadata.requestId);
+    }
 
     await jetStream.publish(subject, this.codec.encode(JSON.stringify(event)), {
-      msgID: event.eventId
+      msgID: event.eventId,
+      headers: natsHeaders
     });
   }
 
