@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { JsMsg } from "nats";
 
+import { runAsyncIterableWithConcurrency } from "../common/run-with-concurrency";
 import { Event, validateIngestionPayload } from "../contracts/v1";
 import { AppConfig } from "../config/configuration";
 import { NatsService } from "../messaging/nats.service";
@@ -28,35 +30,40 @@ export class ConsumerService implements OnModuleInit {
     const appConfig = this.configService.getOrThrow("app");
     const durableName = appConfig.natsDurableName;
     const subject = appConfig.natsIngestSubject;
+    const concurrency = appConfig.workerConcurrency;
 
     const subscription = await connection.jetstream().subscribe(
       subject,
       await this.natsService.buildConsumerOptions(durableName, subject)
     );
 
-    this.logger.log(`Started JetStream consumer ${durableName}`);
+    this.logger.log(`Started JetStream consumer ${durableName} subject=${subject} concurrency=${concurrency}`);
 
     void (async () => {
-      for await (const message of subscription) {
-        try {
-          const event = this.natsService.decodeJson<Event>(message.data);
-          const validatedPayload = validateIngestionPayload(event);
-
-          if (Array.isArray(validatedPayload)) {
-            throw new Error("Worker received batched payload on single-event subject");
-          }
-
-          const inserted = await this.eventsRepository.insertEvent(validatedPayload);
-
-          message.ack();
-
-          this.logger.log(
-            `Persisted eventId=${validatedPayload.eventId} inserted=${inserted} redelivery=${message.info.redeliveryCount}`
-          );
-        } catch (error) {
-          this.logger.error("Failed to process JetStream message", error instanceof Error ? error.stack : undefined);
-        }
-      }
+      await runAsyncIterableWithConcurrency(subscription, concurrency, async (message) => {
+        await this.processMessage(message);
+      });
     })();
+  }
+
+  private async processMessage(message: JsMsg): Promise<void> {
+    try {
+      const event = this.natsService.decodeJson<Event>(message.data);
+      const validatedPayload = validateIngestionPayload(event);
+
+      if (Array.isArray(validatedPayload)) {
+        throw new Error("Worker received batched payload on single-event subject");
+      }
+
+      const inserted = await this.eventsRepository.insertEvent(validatedPayload);
+
+      message.ack();
+
+      this.logger.log(
+        `Persisted eventId=${validatedPayload.eventId} inserted=${inserted} redelivery=${message.info.redeliveryCount}`
+      );
+    } catch (error) {
+      this.logger.error("Failed to process JetStream message", error instanceof Error ? error.stack : undefined);
+    }
   }
 }

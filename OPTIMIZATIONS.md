@@ -1,14 +1,43 @@
 # Optimization Backlog
 
-This file tracks optional improvements that can strengthen the MarTech event pipeline without expanding the MVP scope too early.
+This file tracks optional improvements beyond the completed MVP.
 
-## Keep Out of MVP Unless Time Allows
+The current MVP already includes:
+
+- bounded concurrency for webhook publishing
+- controlled worker concurrency with `ack` after successful persistence
+- dedicated migration bootstrap in Docker Compose
+- readiness checks for PostgreSQL and NATS
+- explicit development guidance for stopping the publisher after integration verification
+
+What remains below is ranked by practical value for this test task.
+
+## Tier 1: Best Return Before Submission
+
+These are the highest-value follow-ups if there is still time after the MVP.
 
 ### Worker Throughput
 
-- Add controlled concurrency for message processing with clear backpressure limits.
-- Evaluate batch inserts for higher sustained throughput if single-row inserts become a bottleneck.
-- Compare push vs pull consumer behavior if JetStream tuning becomes necessary.
+- Evaluate batch inserts if single-row persistence becomes the next real bottleneck.
+- Revisit JetStream consumer settings such as `max_ack_pending` and `ack_wait` after observing sustained traffic.
+- Compare push vs pull consumer behavior only if current JetStream delivery needs tighter flow control.
+
+### Observability
+
+- Add metrics for ingest rate, persist success and failure, duplicates, redeliveries, and report latency.
+- Expose `/metrics` for Prometheus if a small metrics surface can be added cleanly.
+- Add correlation or request IDs across webhook ingest, publish, consume, and persistence logs.
+- Surface JetStream consumer lag or stream depth if operational visibility becomes important.
+
+### Storage and Retention
+
+- Define retention or TTL choices for JetStream and Postgres raw events.
+- Revisit indexes after observing real report query patterns on larger datasets.
+- Consider extracting more reporting fields into dedicated columns if JSONB-based report queries become too heavy.
+
+## Tier 2: Good Backlog, Not Needed For Submission
+
+These improvements are useful, but they add more operational or modeling complexity than the test task needs.
 
 ### Dead-letter Flow
 
@@ -16,24 +45,11 @@ This file tracks optional improvements that can strengthen the MarTech event pip
 - Add a `dead_events` table or equivalent storage for invalid or poison payloads if operational inspection is needed.
 - Document when a message is retried, acked and DLQ'd, or dropped.
 
-### Observability
-
-- Add metrics for ingest rate, persist success and failure, duplicates, redeliveries, and report latency.
-- Expose `/metrics` for Prometheus if time permits.
-- Add correlation or request IDs across webhook ingest, publish, consume, and persistence logs.
-- Surface JetStream consumer lag or stream depth if operational visibility becomes important.
-
 ### Replay and Recovery
 
 - Define a safe replay or reprocessing workflow for JetStream consumers.
 - Document how dedup guarantees correctness during replay.
 - Add an operator-friendly procedure for rebuilding derived analytics if projections are introduced later.
-
-### Storage and Retention
-
-- Define retention or TTL choices for JetStream and Postgres raw events.
-- Revisit indexes after real report query patterns are observed.
-- Consider materialized views or rollups if report latency becomes a problem.
 
 ### Reporting Enhancements
 
@@ -41,8 +57,22 @@ This file tracks optional improvements that can strengthen the MarTech event pip
 - Introduce pagination or cursor-based responses if report result sets grow.
 - Make bucket timezone semantics explicit if hourly or daily aggregation needs stricter reporting guarantees.
 
-### Delivery and Startup Hardening
+## Tier 3: Leave For Later
 
-- Add a dedicated migration or init container so schema setup is explicit in Docker Compose.
-- Tighten startup sequencing and retry policies for dependent services.
-- Add smoke tests covering the end-to-end `docker-compose` path.
+These are legitimate future improvements, but they are not good trade-offs for this test task unless the scope expands substantially.
+
+### Projection and Rollup Layer
+
+- Add materialized views or rollups if report latency becomes a real problem.
+- Introduce aggregate tables only after direct SQL on `raw_events` is no longer sufficient.
+
+### End-to-End Hardening
+
+- Add smoke tests covering the full `docker-compose` path.
+- Expand startup retry policies only if local startup or dependency churn proves unstable.
+
+## Notes
+
+- Do not implement everything in this file just because it exists.
+- For this assignment, a small number of well-justified optimizations is stronger than a large unfinished backlog.
+- The next most defensible improvements are usually observability and storage/retention clarity, not architectural expansion.
