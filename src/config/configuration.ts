@@ -10,6 +10,8 @@ export interface AppConfig {
   natsDurableName: string;
   webhookPublishConcurrency: number;
   workerConcurrency: number;
+  workerBatchSize: number;
+  workerBatchFlushMs: number;
   logLevel: string;
   readinessEnabled: boolean;
 }
@@ -37,6 +39,8 @@ export default (): { app: AppConfig } => ({
     natsDurableName: process.env.NATS_DURABLE_NAME ?? "events-db-writer-v1",
     webhookPublishConcurrency: getNumber(process.env.WEBHOOK_PUBLISH_CONCURRENCY, 50),
     workerConcurrency: getNumber(process.env.WORKER_CONCURRENCY, 10),
+    workerBatchSize: getNumber(process.env.WORKER_BATCH_SIZE, 100),
+    workerBatchFlushMs: getNumber(process.env.WORKER_BATCH_FLUSH_MS, 100),
     logLevel: process.env.LOG_LEVEL ?? "debug",
     readinessEnabled: (process.env.READINESS_ENABLED ?? "true") === "true"
   }
