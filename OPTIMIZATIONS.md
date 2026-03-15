@@ -31,9 +31,9 @@ These are the highest-value follow-ups if there is still time after the MVP.
 
 ### Storage and Retention
 
-- Define retention or TTL choices for JetStream and Postgres raw events.
 - Revisit indexes after observing real report query patterns on larger datasets.
 - Consider extracting more reporting fields into dedicated columns if JSONB-based report queries become too heavy.
+- Add automated Postgres retention, archival, or partitioning only when the MVP outgrows manual volume management.
 
 ## Tier 2: Good Backlog, Not Needed For Submission
 

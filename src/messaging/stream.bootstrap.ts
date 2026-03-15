@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AckPolicy, DeliverPolicy } from "nats";
+import { AckPolicy, DeliverPolicy, DiscardPolicy, RetentionPolicy, nanos } from "nats";
 
 import { AppConfig } from "../config/configuration";
 import { NatsService } from "./nats.service";
@@ -21,16 +21,36 @@ export class StreamBootstrapService {
     const ingestSubject = appConfig.natsIngestSubject;
     const durableName = appConfig.natsDurableName;
     const deliverSubject = `${durableName}.deliver`;
+    const maxAgeNanos = nanos(appConfig.natsStreamMaxAgeHours * 60 * 60 * 1000);
 
     try {
-      await manager.streams.info(streamName);
+      const streamInfo = await manager.streams.info(streamName);
+
+      if (
+        streamInfo.config.max_age !== maxAgeNanos ||
+        streamInfo.config.subjects?.join(",") !== [ingestSubject].join(",")
+      ) {
+        await manager.streams.update(streamName, {
+          subjects: [ingestSubject],
+          max_age: maxAgeNanos
+        });
+
+        this.logger.log(
+          `Updated stream ${streamName} retention maxAgeHours=${appConfig.natsStreamMaxAgeHours}`
+        );
+      }
     } catch {
       await manager.streams.add({
         name: streamName,
-        subjects: [ingestSubject]
+        subjects: [ingestSubject],
+        max_age: maxAgeNanos,
+        retention: RetentionPolicy.Limits,
+        discard: DiscardPolicy.Old
       });
 
-      this.logger.log(`Created stream ${streamName}`);
+      this.logger.log(
+        `Created stream ${streamName} with retention maxAgeHours=${appConfig.natsStreamMaxAgeHours}`
+      );
     }
 
     try {
