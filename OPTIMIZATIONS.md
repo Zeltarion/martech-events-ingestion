@@ -11,6 +11,7 @@ The current MVP already includes:
 - explicit development guidance for stopping the publisher after integration verification
 - correlation IDs across webhook ingress and worker persistence logs
 - `/metrics` endpoints plus Prometheus and Grafana in Docker Compose
+- Loki and Promtail for centralized container log collection in Grafana
 
 What remains below is ranked by practical value for this test task.
 
@@ -35,6 +36,7 @@ These are the highest-value follow-ups if there is still time after the MVP.
   - histogram-style latency metrics instead of averages only
   - database persistence timing and retry visibility
   - alerting rules once dashboards stabilize
+- Add more targeted Loki queries, log-derived metrics, or alerting only after real operational patterns are observed.
 
 ### Storage and Retention
 

@@ -217,6 +217,9 @@ Example:
 - Prometheus is available at `http://localhost:9090`
 - Grafana is available at `http://localhost:3003` with `admin/admin`
 - Grafana is provisioned with a default `MarTech Events Overview` dashboard
+- Loki is available at `http://localhost:3100`
+- Promtail ships Docker container logs into Loki with labels such as `project`, `service`, `container`, and `stream`
+- Grafana is provisioned with a `MarTech Logs Overview` dashboard for centralized log inspection
 - Prometheus data is stored on a Docker volume so historical metrics survive container restarts
 
 Current metrics coverage:
@@ -250,6 +253,7 @@ Future metrics that would be useful if the system grows further:
 Grafana query note:
 
 - dashboard panels use `sum(...)`, `avg(...)`, and `rate(...)` where appropriate so the visuals stay meaningful if multiple instances of the same service are running
+- logs can be filtered in Grafana by labels such as `service="api"` or `service="worker"`
 
 ## Running Locally
 
@@ -283,6 +287,15 @@ curl -s "http://localhost:3001/reports/revenue?from=2026-03-01T00:00:00Z&to=2026
 open http://localhost:9090
 open http://localhost:3003
 ```
+
+5. Inspect centralized logs:
+
+- Open Grafana and use the `MarTech Logs Overview` dashboard
+- Or use Grafana Explore with the Loki datasource
+- Example Loki selectors:
+  - `{project="martech-events-ingestion"}`
+  - `{project="martech-events-ingestion",service="api"}`
+  - `{project="martech-events-ingestion",service="worker"} |= "requestId="`
 
 ## Development Note
 
