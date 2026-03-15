@@ -210,9 +210,46 @@ Example:
 ## Observability
 
 - Consistent Nest logger output across API, Worker, and Reports entrypoints
-- Key operational fields in log messages such as `eventId`, `source`, `subject`, `redelivery`, and `consumer`
+- Request correlation via `x-request-id` propagated from webhook ingress to JetStream consumer logs
+- Key operational fields in log messages such as `requestId`, `eventId`, `source`, `subject`, `redelivery`, and `consumer`
 - Health checks for orchestration and monitoring
-- Optional metrics endpoint later if needed
+- `GET /metrics` is exposed by API, Worker, and Reports for Prometheus scraping
+- Prometheus is available at `http://localhost:9090`
+- Grafana is available at `http://localhost:3003` with `admin/admin`
+- Grafana is provisioned with a default `MarTech Events Overview` dashboard
+- Prometheus data is stored on a Docker volume so historical metrics survive container restarts
+
+Current metrics coverage:
+
+- Webhook:
+  - `mei_webhook_requests_total`
+  - `mei_webhook_events_received_total`
+  - `mei_webhook_publish_failures_total`
+  - `mei_webhook_publish_duration_ms_avg`
+- Worker:
+  - `mei_worker_messages_processed_total`
+  - `mei_worker_messages_inserted_total`
+  - `mei_worker_messages_duplicate_total`
+  - `mei_worker_processing_failures_total`
+  - `mei_worker_message_duration_ms_avg`
+- Reports:
+  - `mei_reports_requests_total`
+  - `mei_reports_duration_ms_avg`
+- Process lifecycle:
+  - `mei_process_start_time_seconds`
+
+Future metrics that would be useful if the system grows further:
+
+- JetStream consumer lag or stream depth
+- per-report endpoint latency and request counters
+- per-source metrics for `facebook` and `tiktok`
+- batch size distribution for worker flushes
+- histogram-based latency metrics instead of averages only
+- database-level persistence latency and retry visibility
+
+Grafana query note:
+
+- dashboard panels use `sum(...)`, `avg(...)`, and `rate(...)` where appropriate so the visuals stay meaningful if multiple instances of the same service are running
 
 ## Running Locally
 
@@ -227,6 +264,9 @@ docker-compose up --build
 ```bash
 curl -s http://localhost:3000/health/liveness
 curl -s http://localhost:3000/health/readiness
+curl -s http://localhost:3000/metrics
+curl -s http://localhost:3002/metrics
+curl -s http://localhost:3001/metrics
 ```
 
 3. Call reports:
@@ -235,6 +275,13 @@ curl -s http://localhost:3000/health/readiness
 curl -s "http://localhost:3001/reports/funnel?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z"
 curl -s "http://localhost:3001/reports/countries?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z&limit=10"
 curl -s "http://localhost:3001/reports/revenue?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z&groupBy=day"
+```
+
+4. Inspect observability:
+
+```bash
+open http://localhost:9090
+open http://localhost:3003
 ```
 
 ## Development Note

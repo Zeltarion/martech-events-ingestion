@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "mei-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:3000"]
+
+  - job_name: "mei-worker"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["worker:3002"]
+
+  - job_name: "mei-reports"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["reports:3001"]

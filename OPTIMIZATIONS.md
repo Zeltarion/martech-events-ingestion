@@ -9,6 +9,8 @@ The current MVP already includes:
 - dedicated migration bootstrap in Docker Compose
 - readiness checks for PostgreSQL and NATS
 - explicit development guidance for stopping the publisher after integration verification
+- correlation IDs across webhook ingress and worker persistence logs
+- `/metrics` endpoints plus Prometheus and Grafana in Docker Compose
 
 What remains below is ranked by practical value for this test task.
 
@@ -24,10 +26,15 @@ These are the highest-value follow-ups if there is still time after the MVP.
 
 ### Observability
 
-- Add metrics for ingest rate, persist success and failure, duplicates, redeliveries, and report latency.
-- Expose `/metrics` for Prometheus if a small metrics surface can be added cleanly.
-- Add correlation or request IDs across webhook ingest, publish, consume, and persistence logs.
 - Surface JetStream consumer lag or stream depth if operational visibility becomes important.
+- Add more focused Grafana panels or alerts only after real operational questions emerge.
+- Add richer metrics as a lower-priority follow-up:
+  - per-report endpoint counters and latency
+  - per-source counters for `facebook` and `tiktok`
+  - worker batch size distribution
+  - histogram-style latency metrics instead of averages only
+  - database persistence timing and retry visibility
+  - alerting rules once dashboards stabilize
 
 ### Storage and Retention
 

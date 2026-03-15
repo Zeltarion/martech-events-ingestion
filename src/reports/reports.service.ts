@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 
+import { MetricsService } from "../observability/metrics.service";
 import {
   CountriesReportFilters,
   EventsRepository,
@@ -9,7 +10,10 @@ import {
 
 @Injectable()
 export class ReportsService {
-  public constructor(private readonly eventsRepository: EventsRepository) {}
+  public constructor(
+    private readonly eventsRepository: EventsRepository,
+    private readonly metricsService: MetricsService
+  ) {}
 
   public async getFunnelReport(filters: ReportFilters): Promise<{
     from: string;
@@ -19,8 +23,10 @@ export class ReportsService {
     bottomCount: number;
     conversionRate: number;
   }> {
+    const startedAt = Date.now();
     const result = await this.eventsRepository.getFunnelReport(filters);
     const conversionRate = result.topCount === 0 ? 0 : result.bottomCount / result.topCount;
+    this.metricsService.recordReportRequest(Date.now() - startedAt);
 
     return {
       from: filters.from,
@@ -39,7 +45,9 @@ export class ReportsService {
     limit: number;
     items: Array<{ country: string; eventsCount: number; uniqueUsers: number }>;
   }> {
+    const startedAt = Date.now();
     const items = await this.eventsRepository.getCountriesReport(filters);
+    this.metricsService.recordReportRequest(Date.now() - startedAt);
 
     return {
       from: filters.from,
@@ -58,10 +66,12 @@ export class ReportsService {
     items: Array<{ bucket: string; revenue: string }>;
     totalRevenue: string;
   }> {
+    const startedAt = Date.now();
     const items = await this.eventsRepository.getRevenueReport(filters);
     const totalRevenue = items
       .reduce((accumulator, item) => accumulator + Number(item.revenue), 0)
       .toFixed(2);
+    this.metricsService.recordReportRequest(Date.now() - startedAt);
 
     return {
       from: filters.from,
