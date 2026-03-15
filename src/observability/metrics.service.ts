@@ -8,6 +8,7 @@ interface CounterMap {
   workerMessagesInsertedTotal: number;
   workerMessagesDuplicateTotal: number;
   workerProcessingFailuresTotal: number;
+  workerDlqMessagesTotal: number;
   reportsRequestsTotal: number;
 }
 
@@ -28,6 +29,7 @@ export class MetricsService {
     workerMessagesInsertedTotal: 0,
     workerMessagesDuplicateTotal: 0,
     workerProcessingFailuresTotal: 0,
+    workerDlqMessagesTotal: 0,
     reportsRequestsTotal: 0
   };
 
@@ -56,6 +58,10 @@ export class MetricsService {
 
   public recordWorkerFailure(): void {
     this.counters.workerProcessingFailuresTotal += 1;
+  }
+
+  public recordWorkerDlqMessage(): void {
+    this.counters.workerDlqMessagesTotal += 1;
   }
 
   public recordReportRequest(durationMs: number): void {
@@ -95,6 +101,8 @@ export class MetricsService {
       `mei_worker_messages_duplicate_total ${this.counters.workerMessagesDuplicateTotal}`,
       "# TYPE mei_worker_processing_failures_total counter",
       `mei_worker_processing_failures_total ${this.counters.workerProcessingFailuresTotal}`,
+      "# TYPE mei_worker_dlq_messages_total counter",
+      `mei_worker_dlq_messages_total ${this.counters.workerDlqMessagesTotal}`,
       "# TYPE mei_reports_requests_total counter",
       `mei_reports_requests_total ${this.counters.reportsRequestsTotal}`,
       "# TYPE mei_webhook_publish_duration_ms_avg gauge",
