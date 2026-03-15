@@ -38,6 +38,11 @@ The API returns quickly after validation and publish, while NATS JetStream buffe
 
 This MVP relies on queue-based decoupling and separate API and Worker processes as the primary burst-handling strategy. If sustained load requires it later, the design leaves room for controlled concurrency, batch inserts, and consumer tuning.
 
+Two lightweight throughput controls are already exposed through environment variables:
+
+- `WEBHOOK_PUBLISH_CONCURRENCY`: limits how many event publishes the API performs in parallel for a single incoming batch
+- `WORKER_CONCURRENCY`: limits how many JetStream messages the Worker processes concurrently while still acknowledging only after persistence succeeds
+
 ## Architecture
 
 This is a modular monolith with separate entrypoints for API, Worker, and Reports. It runs as multiple containers from the same image, which keeps the MVP small while preserving clean seams for future extraction or independent scaling.
@@ -237,6 +242,8 @@ When another end-to-end verification pass is needed, start it again:
 ```bash
 docker compose start publisher
 ```
+
+If local resource usage needs to be reduced further, lower `WEBHOOK_PUBLISH_CONCURRENCY` and `WORKER_CONCURRENCY` in `.env`.
 
 ## Project Structure
 

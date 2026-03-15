@@ -3,6 +3,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { EventBatchSchema, EventSchema, IngestionPayloadSchema, isEventBatchPayload } from "../contracts/v1";
 import { ConfigService } from "@nestjs/config";
 import { AppConfig } from "../config/configuration";
+import { runWithConcurrency } from "../common/run-with-concurrency";
 import { NatsService } from "../messaging/nats.service";
 
 @Injectable()
@@ -22,10 +23,15 @@ export class WebhookService {
 
     const events = isEventBatchPayload(payload) ? payload : [payload];
     const subject = appConfig.natsIngestSubject;
+    const startedAt = Date.now();
 
-    for (const event of events) {
+    await runWithConcurrency(events, appConfig.webhookPublishConcurrency, async (event) => {
       await this.natsService.publishEvent(subject, event);
-    }
+    });
+
+    this.logger.log(
+      `Published batch size=${events.length} subject=${subject} concurrency=${appConfig.webhookPublishConcurrency} durationMs=${Date.now() - startedAt}`
+    );
   }
 
   private describePayload(payload: IngestionPayloadSchema): string {

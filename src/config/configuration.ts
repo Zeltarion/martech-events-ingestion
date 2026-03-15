@@ -8,6 +8,8 @@ export interface AppConfig {
   natsIngestSubject: string;
   natsDlqSubject: string;
   natsDurableName: string;
+  webhookPublishConcurrency: number;
+  workerConcurrency: number;
   logLevel: string;
   readinessEnabled: boolean;
 }
@@ -33,6 +35,8 @@ export default (): { app: AppConfig } => ({
     natsIngestSubject: process.env.NATS_INGEST_SUBJECT ?? "events.ingest.v1",
     natsDlqSubject: process.env.NATS_DLQ_SUBJECT ?? "events.dlq.v1",
     natsDurableName: process.env.NATS_DURABLE_NAME ?? "events-db-writer-v1",
+    webhookPublishConcurrency: getNumber(process.env.WEBHOOK_PUBLISH_CONCURRENCY, 50),
+    workerConcurrency: getNumber(process.env.WORKER_CONCURRENCY, 10),
     logLevel: process.env.LOG_LEVEL ?? "debug",
     readinessEnabled: (process.env.READINESS_ENABLED ?? "true") === "true"
   }
