@@ -56,10 +56,10 @@ export class StreamBootstrapService {
     try {
       const consumerInfo = await manager.consumers.info(streamName, durableName);
 
-      if (consumerInfo.config.deliver_subject !== deliverSubject) {
+      if (this.needsConsumerRecreation(consumerInfo.config, deliverSubject, ingestSubject, appConfig)) {
         await manager.consumers.delete(streamName, durableName);
 
-        this.logger.warn(`Recreated durable consumer ${durableName} to align deliver_subject`);
+        this.logger.warn(`Recreated durable consumer ${durableName} to align delivery settings`);
         await this.createConsumer(streamName, durableName, ingestSubject, deliverSubject);
       }
     } catch {
@@ -74,18 +74,40 @@ export class StreamBootstrapService {
     deliverSubject: string
   ): Promise<void> {
     const manager = await this.natsService.getJetStreamManager();
+    const appConfig = this.configService.getOrThrow("app");
 
     await manager.consumers.add(streamName, {
       durable_name: durableName,
       ack_policy: AckPolicy.Explicit,
       deliver_policy: DeliverPolicy.All,
       deliver_subject: deliverSubject,
-      ack_wait: 30_000_000_000,
+      ack_wait: nanos(appConfig.natsConsumerAckWaitMs),
       max_deliver: 10,
-      max_ack_pending: 1_000,
+      max_ack_pending: appConfig.natsConsumerMaxAckPending,
       filter_subject: ingestSubject
     });
 
     this.logger.log(`Created durable consumer ${durableName}`);
+  }
+
+  private needsConsumerRecreation(
+    consumerConfig: {
+      deliver_subject?: string;
+      filter_subject?: string;
+      ack_wait?: number;
+      max_deliver?: number;
+      max_ack_pending?: number;
+    },
+    deliverSubject: string,
+    ingestSubject: string,
+    appConfig: AppConfig
+  ): boolean {
+    return (
+      consumerConfig.deliver_subject !== deliverSubject ||
+      consumerConfig.filter_subject !== ingestSubject ||
+      consumerConfig.ack_wait !== nanos(appConfig.natsConsumerAckWaitMs) ||
+      consumerConfig.max_deliver !== 10 ||
+      consumerConfig.max_ack_pending !== appConfig.natsConsumerMaxAckPending
+    );
   }
 }

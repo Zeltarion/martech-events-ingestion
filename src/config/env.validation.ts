@@ -12,6 +12,8 @@ export const envValidationSchema = Joi.object({
   NATS_DLQ_SUBJECT: Joi.string().default("events.dlq.v1"),
   NATS_DURABLE_NAME: Joi.string().default("events-db-writer-v1"),
   NATS_STREAM_MAX_AGE_HOURS: Joi.number().integer().min(1).default(24),
+  NATS_CONSUMER_ACK_WAIT_MS: Joi.number().integer().min(1).default(60000),
+  NATS_CONSUMER_MAX_ACK_PENDING: Joi.number().integer().min(1).optional(),
   WEBHOOK_PUBLISH_CONCURRENCY: Joi.number().integer().min(1).default(50),
   WORKER_CONCURRENCY: Joi.number().integer().min(1).default(10),
   WORKER_BATCH_SIZE: Joi.number().integer().min(1).default(100),

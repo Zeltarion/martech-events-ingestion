@@ -42,6 +42,8 @@ Two lightweight throughput controls are already exposed through environment vari
 
 - `WEBHOOK_PUBLISH_CONCURRENCY`: limits how many event publishes the API performs in parallel for a single incoming batch
 - `WORKER_CONCURRENCY`: limits how many JetStream messages the Worker processes concurrently while still acknowledging only after persistence succeeds
+- `NATS_CONSUMER_ACK_WAIT_MS`: controls how long JetStream waits for a worker `ack` before redelivery becomes eligible
+- `NATS_CONSUMER_MAX_ACK_PENDING`: caps how many unacked messages JetStream may have in flight for the worker at once
 
 ## Architecture
 
@@ -89,6 +91,8 @@ The system uses NATS JetStream for durable asynchronous delivery.
 - Semantics: at-least-once delivery
 - Idempotency: PostgreSQL dedup via `UNIQUE(event_id)` plus `INSERT ... ON CONFLICT DO NOTHING`
 - Stream retention: JetStream uses limits-based retention with `max_age` controlled by `NATS_STREAM_MAX_AGE_HOURS`
+- Consumer backpressure: `max_ack_pending` is bounded and defaults to `WORKER_CONCURRENCY * WORKER_BATCH_SIZE`, so JetStream does not outpace the worker's current batch-processing capacity
+- Redelivery timing: `ack_wait` is configurable through `NATS_CONSUMER_ACK_WAIT_MS` to keep batch persistence and redelivery timing aligned
 
 Result: effectively-once persistence, built from at-least-once transport plus idempotent writes.
 
@@ -319,6 +323,8 @@ docker compose start publisher
 
 If local resource usage needs to be reduced further, lower `WEBHOOK_PUBLISH_CONCURRENCY` and `WORKER_CONCURRENCY` in `.env`.
 If queue storage needs to be reduced further, lower `NATS_STREAM_MAX_AGE_HOURS` in `.env`.
+If worker redeliveries happen too aggressively under load, increase `NATS_CONSUMER_ACK_WAIT_MS`.
+If JetStream is allowed to push more unacked work than the worker should hold at once, lower `NATS_CONSUMER_MAX_ACK_PENDING`.
 
 ## Project Structure
 

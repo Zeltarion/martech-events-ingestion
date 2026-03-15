@@ -22,7 +22,6 @@ These are the highest-value follow-ups if there is still time after the MVP.
 ### Worker Throughput
 
 - Evaluate batch inserts if single-row persistence becomes the next real bottleneck.
-- Revisit JetStream consumer settings such as `max_ack_pending` and `ack_wait` after observing sustained traffic.
 - Compare push vs pull consumer behavior only if current JetStream delivery needs tighter flow control.
 
 ### Observability
