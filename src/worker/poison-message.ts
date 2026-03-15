@@ -1,4 +1,16 @@
-import { JsMsg } from "nats";
+interface MessageHeadersLike {
+  get(key: string): string | undefined;
+}
+
+interface WorkerMessageLike {
+  data: Uint8Array;
+  subject: string;
+  headers?: MessageHeadersLike;
+  info: {
+    redeliveryCount: number;
+  };
+}
+
 import { ZodError } from "zod";
 
 export class PoisonMessageError extends Error {
@@ -22,7 +34,7 @@ export function isPoisonMessageError(error: unknown): boolean {
   return error instanceof PoisonMessageError || error instanceof SyntaxError || error instanceof ZodError;
 }
 
-export function buildDlqEnvelope(message: JsMsg, error: unknown): DlqEnvelope {
+export function buildDlqEnvelope(message: WorkerMessageLike, error: unknown): DlqEnvelope {
   const rawPayload = new TextDecoder().decode(message.data);
   const parsedPayload = tryParseRawPayload(rawPayload);
 

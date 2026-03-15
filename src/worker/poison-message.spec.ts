@@ -24,7 +24,7 @@ describe("poison-message helpers", () => {
       }
     };
 
-    const envelope = buildDlqEnvelope(message as never, new PoisonMessageError("schema mismatch"));
+    const envelope = buildDlqEnvelope(message, new PoisonMessageError("schema mismatch"));
 
     expect(envelope.requestId).toBe("req-123");
     expect(envelope.reason).toBe("schema mismatch");

@@ -147,11 +147,11 @@
       },
       "targets": [
         {
-          "expr": "avg(mei_worker_message_duration_ms_avg)",
+          "expr": "avg(mei_worker_batch_duration_ms_avg)",
           "refId": "A"
         }
       ],
-      "title": "Avg Worker Message ms",
+      "title": "Avg Worker Batch ms",
       "type": "stat"
     },
     {
@@ -205,9 +205,80 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
+        "w": 8,
         "x": 0,
         "y": 16
+      },
+      "id": 7,
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg(mei_worker_batch_size_avg)",
+          "refId": "A"
+        }
+      ],
+      "title": "Avg Worker Batch Size",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 16
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (__name__) ({__name__=~\"mei_reports_(funnel|countries|revenue)_requests_total\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Report Requests By Endpoint",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
       },
       "id": 6,
       "options": {

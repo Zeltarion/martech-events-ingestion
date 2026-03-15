@@ -39,7 +39,7 @@ export class EventsRepository {
   ) {}
 
   public async insertEvent(event: Event): Promise<boolean> {
-    const model = this.mapEventToInsertModel(event);
+    const model = mapEventToInsertModel(event);
     const insertedEventIds = await this.insertModels([model]);
 
     return insertedEventIds.has(model.eventId);
@@ -50,7 +50,7 @@ export class EventsRepository {
       return new Set<string>();
     }
 
-    const models = deduplicateInsertModels(events.map((event) => this.mapEventToInsertModel(event)));
+    const models = deduplicateInsertModels(events.map((event) => mapEventToInsertModel(event)));
 
     return this.insertModels(models);
   }
@@ -140,14 +140,6 @@ export class EventsRepository {
       bucket: String(row.bucket),
       revenue: String(row.revenue)
     }));
-  }
-
-  private mapEventToInsertModel(event: Event): RawEventInsertModel {
-    return mapEventToInsertModel(event);
-  }
-
-  private extractCountry(event: Event): string | null {
-    return extractCountry(event);
   }
 
   private async insertModels(models: RawEventInsertModel[]): Promise<Set<string>> {
