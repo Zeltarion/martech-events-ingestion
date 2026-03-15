@@ -132,8 +132,32 @@ services:
     depends_on:
       prometheus:
         condition: service_started
+      loki:
+        condition: service_started
     ports:
       - "3003:3000"
+
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: mei-loki
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./ops/loki/config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+
+  promtail:
+    image: grafana/promtail:3.4.2
+    container_name: mei-promtail
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./ops/promtail/config.yml:/etc/promtail/config.yml:ro
+      - promtail_positions:/tmp
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      loki:
+        condition: service_started
 
   publisher:
     image: andriiuni/events:latest
@@ -147,3 +171,5 @@ services:
 volumes:
   postgres_data:
   prometheus_data:
+  loki_data:
+  promtail_positions:
