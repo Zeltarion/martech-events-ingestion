@@ -88,6 +88,7 @@ The system uses NATS JetStream for durable asynchronous delivery.
 - Consumer: durable, for example `events-db-writer-v1`
 - Semantics: at-least-once delivery
 - Idempotency: PostgreSQL dedup via `UNIQUE(event_id)` plus `INSERT ... ON CONFLICT DO NOTHING`
+- Stream retention: JetStream uses limits-based retention with `max_age` controlled by `NATS_STREAM_MAX_AGE_HOURS`
 
 Result: effectively-once persistence, built from at-least-once transport plus idempotent writes.
 
@@ -121,6 +122,19 @@ Recommended indexes:
 - `(source, occurred_at)`
 - `(event_type, occurred_at)`
 - `(country, occurred_at)` if geo reports justify it
+
+## Retention Policy
+
+Retention is intentionally explicit:
+
+- JetStream keeps buffered transport messages for a bounded period via `NATS_STREAM_MAX_AGE_HOURS`
+- PostgreSQL `raw_events` is the system of record for analytics in the MVP and does not auto-prune rows
+
+Current MVP expectation:
+
+- JetStream retention protects local environments from unbounded queue growth
+- Postgres retention is managed manually during development, for example by resetting Docker volumes when needed
+- If the project evolves beyond MVP, Postgres retention should move to a documented TTL, archival, or partitioning strategy
 
 ## API Endpoints
 
@@ -244,6 +258,7 @@ docker compose start publisher
 ```
 
 If local resource usage needs to be reduced further, lower `WEBHOOK_PUBLISH_CONCURRENCY` and `WORKER_CONCURRENCY` in `.env`.
+If queue storage needs to be reduced further, lower `NATS_STREAM_MAX_AGE_HOURS` in `.env`.
 
 ## Project Structure
 

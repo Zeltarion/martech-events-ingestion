@@ -8,6 +8,7 @@ export interface AppConfig {
   natsIngestSubject: string;
   natsDlqSubject: string;
   natsDurableName: string;
+  natsStreamMaxAgeHours: number;
   webhookPublishConcurrency: number;
   workerConcurrency: number;
   workerBatchSize: number;
@@ -37,6 +38,7 @@ export default (): { app: AppConfig } => ({
     natsIngestSubject: process.env.NATS_INGEST_SUBJECT ?? "events.ingest.v1",
     natsDlqSubject: process.env.NATS_DLQ_SUBJECT ?? "events.dlq.v1",
     natsDurableName: process.env.NATS_DURABLE_NAME ?? "events-db-writer-v1",
+    natsStreamMaxAgeHours: getNumber(process.env.NATS_STREAM_MAX_AGE_HOURS, 24),
     webhookPublishConcurrency: getNumber(process.env.WEBHOOK_PUBLISH_CONCURRENCY, 50),
     workerConcurrency: getNumber(process.env.WORKER_CONCURRENCY, 10),
     workerBatchSize: getNumber(process.env.WORKER_BATCH_SIZE, 100),
