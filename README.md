@@ -7,8 +7,45 @@ This repository implements a production-minded event-driven backend system that 
 The full infrastructure is intended to start with a single command:
 
 ```bash
-docker-compose up
+docker compose up
 ```
+
+## Quick Start
+
+1. Start the full stack:
+
+```bash
+docker compose up
+```
+
+2. Verify that the core services are healthy:
+
+```bash
+curl -s http://localhost:3000/health/readiness
+curl -s "http://localhost:3001/reports/funnel?from=2026-03-14T00:00:00Z&to=2026-03-16T00:00:00Z"
+```
+
+3. Inspect observability:
+
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3003`
+- Loki: `http://localhost:3100`
+
+4. Stop the publisher after the end-to-end check to avoid filling the local database:
+
+```bash
+npm run dev:publisher:stop
+```
+
+## Verification
+
+On a clean startup, the expected behavior is:
+
+- PostgreSQL and NATS become healthy
+- migrations run automatically
+- the publisher starts sending webhook batches to the API
+- the worker persists events into `raw_events`
+- reports respond without any manual bootstrap step
 
 ## Overview
 
@@ -292,7 +329,13 @@ Grafana query note:
 1. Start everything:
 
 ```bash
-docker-compose up --build
+docker compose up
+```
+
+If local images need to be rebuilt after code changes:
+
+```bash
+docker compose up --build
 ```
 
 2. Verify health:
@@ -336,15 +379,14 @@ The publisher emits a continuous high-volume stream and can fill the development
 Recommended workflow:
 
 1. Start the full stack and verify the end-to-end flow.
-2. Confirm that webhook ingest, JetStream delivery, worker persistence, and Postgres writes all work.
-3. Stop the publisher while continuing development:
+2. Stop the publisher while continuing development:
 
 ```bash
 docker compose stop publisher
 npm run dev:publisher:stop
 ```
 
-When another end-to-end verification pass is needed, start it again:
+3. Start it again only for another end-to-end verification pass:
 
 ```bash
 docker compose start publisher
@@ -360,6 +402,9 @@ If JetStream is allowed to push more unacked work than the worker should hold at
 
 ```text
 src/
+  bootstrap/
+    bootstrap.util.ts
+
   entrypoints/
     api.main.ts
     worker.main.ts
@@ -370,19 +415,68 @@ src/
     worker.app.module.ts
     reports.app.module.ts
 
+  common/
+    run-with-concurrency.ts
+
+  config/
+    config.module.ts
+    configuration.ts
+    env.validation.ts
+
   contracts/
     v1/
       event.types.ts
       event.schema.ts
+      event.schema.spec.ts
       index.ts
 
   ingestion/
+    ingestion.module.ts
+    webhook.controller.ts
+    webhook.service.ts
+
   messaging/
+    messaging.module.ts
+    nats.service.ts
+    stream.bootstrap.ts
+    subjects.ts
+
   persistence/
+    entities/
+      raw-event.entity.ts
+    migrations/
+      20260314000000-create-raw-events-table.ts
+      20260315010000-add-purchase-amount-column.ts
+    persistence.module.ts
+    events.repository.ts
+    events.mapper.spec.ts
+    events.repository.spec.ts
+    typeorm.config.ts
+    typeorm.datasource.ts
+
   worker/
+    consumer.service.ts
+    message-error-handler.ts
+    poison-message.ts
+    message-error-handler.spec.ts
+    poison-message.spec.ts
+
   reports/
+    reports.controller.ts
+    reports.service.ts
+    report-query.schema.ts
+
   health/
+    health.module.ts
+    health.controller.ts
+    health.service.ts
+
   observability/
+    observability.module.ts
+    metrics.controller.ts
+    metrics.service.ts
+    metrics.service.spec.ts
+    request-id.ts
 ```
 
 ## Why This Design
@@ -392,6 +486,8 @@ src/
 - NATS JetStream provides durable buffering and smooth burst handling.
 - PostgreSQL dedup provides correctness under at-least-once delivery.
 - Versioned contracts in `contracts/v1` make future schema evolution safer.
+- `persistence/` stays intentionally flat in the MVP because there is currently a single repository and a single aggregate-like storage table.
+- Tests are colocated next to the code they validate so repository and contract behavior remain easy to trace during review.
 
 ## Event Contract
 

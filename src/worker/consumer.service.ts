@@ -9,7 +9,8 @@ import { NatsService } from "../messaging/nats.service";
 import { StreamBootstrapService } from "../messaging/stream.bootstrap";
 import { MetricsService } from "../observability/metrics.service";
 import { EventsRepository } from "../persistence/events.repository";
-import { buildDlqEnvelope, isPoisonMessageError, PoisonMessageError } from "./poison-message";
+import { handleWorkerMessageError } from "./message-error-handler";
+import { buildDlqEnvelope, PoisonMessageError } from "./poison-message";
 
 interface PendingMessage {
   message: JsMsg;
@@ -90,13 +91,20 @@ export class ConsumerService implements OnModuleInit {
         await this.flushPendingBatch(concurrency);
       }
     } catch (error) {
-      if (isPoisonMessageError(error)) {
-        await this.parkPoisonMessage(message, error);
-        return;
-      }
-
-      this.metricsService.recordWorkerFailure();
-      this.logger.error("Failed to process JetStream message", error instanceof Error ? error.stack : undefined);
+      await handleWorkerMessageError(error, {
+        parkPoisonMessage: async (poisonError) => this.parkPoisonMessage(message, poisonError),
+        recordWorkerFailure: () => this.metricsService.recordWorkerFailure(),
+        logProcessingFailure: (processingError) =>
+          this.logger.error(
+            "Failed to process JetStream message",
+            processingError instanceof Error ? processingError.stack : undefined
+          ),
+        logDlqFailure: (dlqError) =>
+          this.logger.error(
+            "Failed to move poison message to DLQ",
+            dlqError instanceof Error ? dlqError.stack : undefined
+          )
+      });
     }
   }
 
