@@ -39,35 +39,19 @@ export class EventsRepository {
 
   public async insertEvent(event: Event): Promise<boolean> {
     const model = this.mapEventToInsertModel(event);
-    const insertResult = await this.rawEventRepository.query(
-      `
-        INSERT INTO raw_events (
-          event_id,
-          occurred_at,
-          source,
-          funnel_stage,
-          event_type,
-          user_id,
-          country,
-          payload
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
-        ON CONFLICT (event_id) DO NOTHING
-        RETURNING event_id
-      `,
-      [
-        model.eventId,
-        model.occurredAt,
-        model.source,
-        model.funnelStage,
-        model.eventType,
-        model.userId,
-        model.country,
-        JSON.stringify(model.payload)
-      ]
-    );
+    const insertedEventIds = await this.insertModels([model]);
 
-    return Array.isArray(insertResult) && insertResult.length > 0;
+    return insertedEventIds.has(model.eventId);
+  }
+
+  public async insertEvents(events: Event[]): Promise<Set<string>> {
+    if (events.length === 0) {
+      return new Set<string>();
+    }
+
+    const models = deduplicateInsertModels(events.map((event) => this.mapEventToInsertModel(event)));
+
+    return this.insertModels(models);
   }
 
   public async getFunnelReport(filters: ReportFilters): Promise<{
@@ -168,6 +152,55 @@ export class EventsRepository {
   private extractCountry(event: Event): string | null {
     return extractCountry(event);
   }
+
+  private async insertModels(models: RawEventInsertModel[]): Promise<Set<string>> {
+    if (models.length === 0) {
+      return new Set<string>();
+    }
+
+    const values: unknown[] = [];
+    const placeholders = models.map((model, index) => {
+      const offset = index * 8;
+
+      values.push(
+        model.eventId,
+        model.occurredAt,
+        model.source,
+        model.funnelStage,
+        model.eventType,
+        model.userId,
+        model.country,
+        JSON.stringify(model.payload)
+      );
+
+      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}::jsonb)`;
+    });
+
+    const insertResult = await this.rawEventRepository.query(
+      `
+        INSERT INTO raw_events (
+          event_id,
+          occurred_at,
+          source,
+          funnel_stage,
+          event_type,
+          user_id,
+          country,
+          payload
+        )
+        VALUES ${placeholders.join(", ")}
+        ON CONFLICT (event_id) DO NOTHING
+        RETURNING event_id
+      `,
+      values
+    );
+
+    return new Set(
+      Array.isArray(insertResult)
+        ? insertResult.map((row: Record<string, unknown>) => String(row.event_id))
+        : []
+    );
+  }
 }
 
 export function mapEventToInsertModel(event: Event): RawEventInsertModel {
@@ -205,4 +238,16 @@ function extractTiktokCountry(event: Extract<Event, { source: "tiktok" }>): stri
   }
 
   return event.data.engagement.country;
+}
+
+function deduplicateInsertModels(models: RawEventInsertModel[]): RawEventInsertModel[] {
+  const uniqueModels = new Map<string, RawEventInsertModel>();
+
+  for (const model of models) {
+    if (!uniqueModels.has(model.eventId)) {
+      uniqueModels.set(model.eventId, model);
+    }
+  }
+
+  return Array.from(uniqueModels.values());
 }

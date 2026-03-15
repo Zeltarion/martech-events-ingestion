@@ -41,5 +41,12 @@ describe("EventsRepository", () => {
 
     await expect(repository.insertEvent(createTiktokBottomEvent())).resolves.toBe(false);
   });
+  
+  it("returns inserted event ids for bulk inserts", async () => {
+    const { repository } = createRepository([{ event_id: "evt-tt-bottom-1" }]);
 
+    await expect(repository.insertEvents([createTiktokBottomEvent()])).resolves.toEqual(
+      new Set(["evt-tt-bottom-1"])
+    );
+  });
 });

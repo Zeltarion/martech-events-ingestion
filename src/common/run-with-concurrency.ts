@@ -1,3 +1,23 @@
+export async function enqueueWithConcurrencyLimit(
+  inFlight: Set<Promise<void>>,
+  concurrency: number,
+  taskFactory: () => Promise<void>
+): Promise<void> {
+  const task = taskFactory().finally(() => {
+    inFlight.delete(task);
+  });
+
+  inFlight.add(task);
+
+  if (inFlight.size >= Math.max(1, concurrency)) {
+    await Promise.race(inFlight);
+  }
+}
+
+export async function drainConcurrencyPool(inFlight: Set<Promise<void>>): Promise<void> {
+  await Promise.all(inFlight);
+}
+
 export async function runWithConcurrency<T>(
   items: readonly T[],
   concurrency: number,
@@ -7,43 +27,13 @@ export async function runWithConcurrency<T>(
     return;
   }
 
-  const limit = Math.max(1, concurrency);
   const inFlight = new Set<Promise<void>>();
 
   for (const item of items) {
-    const task = handler(item).finally(() => {
-      inFlight.delete(task);
+    await enqueueWithConcurrencyLimit(inFlight, concurrency, async () => {
+      await handler(item);
     });
-
-    inFlight.add(task);
-
-    if (inFlight.size >= limit) {
-      await Promise.race(inFlight);
-    }
   }
 
-  await Promise.all(inFlight);
-}
-
-export async function runAsyncIterableWithConcurrency<T>(
-  items: AsyncIterable<T>,
-  concurrency: number,
-  handler: (item: T) => Promise<void>
-): Promise<void> {
-  const limit = Math.max(1, concurrency);
-  const inFlight = new Set<Promise<void>>();
-
-  for await (const item of items) {
-    const task = handler(item).finally(() => {
-      inFlight.delete(task);
-    });
-
-    inFlight.add(task);
-
-    if (inFlight.size >= limit) {
-      await Promise.race(inFlight);
-    }
-  }
-
-  await Promise.all(inFlight);
+  await drainConcurrencyPool(inFlight);
 }

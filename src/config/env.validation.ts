@@ -12,6 +12,8 @@ export const envValidationSchema = Joi.object({
   NATS_DURABLE_NAME: Joi.string().default("events-db-writer-v1"),
   WEBHOOK_PUBLISH_CONCURRENCY: Joi.number().integer().min(1).default(50),
   WORKER_CONCURRENCY: Joi.number().integer().min(1).default(10),
+  WORKER_BATCH_SIZE: Joi.number().integer().min(1).default(100),
+  WORKER_BATCH_FLUSH_MS: Joi.number().integer().min(1).default(100),
   LOG_LEVEL: Joi.string().default("debug"),
   READINESS_ENABLED: Joi.boolean().truthy("true").falsy("false").default(true)
 });
