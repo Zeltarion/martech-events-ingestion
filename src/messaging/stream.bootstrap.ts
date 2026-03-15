@@ -19,19 +19,21 @@ export class StreamBootstrapService {
     const appConfig = this.configService.getOrThrow("app");
     const streamName = appConfig.natsStreamName;
     const ingestSubject = appConfig.natsIngestSubject;
+    const dlqSubject = appConfig.natsDlqSubject;
     const durableName = appConfig.natsDurableName;
     const deliverSubject = `${durableName}.deliver`;
     const maxAgeNanos = nanos(appConfig.natsStreamMaxAgeHours * 60 * 60 * 1000);
+    const expectedSubjects = [ingestSubject, dlqSubject];
 
     try {
       const streamInfo = await manager.streams.info(streamName);
 
       if (
         streamInfo.config.max_age !== maxAgeNanos ||
-        streamInfo.config.subjects?.join(",") !== [ingestSubject].join(",")
+        streamInfo.config.subjects?.join(",") !== expectedSubjects.join(",")
       ) {
         await manager.streams.update(streamName, {
-          subjects: [ingestSubject],
+          subjects: expectedSubjects,
           max_age: maxAgeNanos
         });
 
@@ -42,7 +44,7 @@ export class StreamBootstrapService {
     } catch {
       await manager.streams.add({
         name: streamName,
-        subjects: [ingestSubject],
+        subjects: expectedSubjects,
         max_age: maxAgeNanos,
         retention: RetentionPolicy.Limits,
         discard: DiscardPolicy.Old

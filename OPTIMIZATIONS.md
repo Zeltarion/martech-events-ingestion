@@ -47,12 +47,6 @@ These are the highest-value follow-ups if there is still time after the MVP.
 
 These improvements are useful, but they add more operational or modeling complexity than the test task needs.
 
-### Dead-letter Flow
-
-- Formalize DLQ handling with a dedicated subject, schema, and replay procedure.
-- Add a `dead_events` table or equivalent storage for invalid or poison payloads if operational inspection is needed.
-- Document when a message is retried, acked and DLQ'd, or dropped.
-
 ### Replay and Recovery
 
 - Define a safe replay or reprocessing workflow for JetStream consumers.

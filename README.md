@@ -93,6 +93,7 @@ The system uses NATS JetStream for durable asynchronous delivery.
 - Stream retention: JetStream uses limits-based retention with `max_age` controlled by `NATS_STREAM_MAX_AGE_HOURS`
 - Consumer backpressure: `max_ack_pending` is bounded and defaults to `WORKER_CONCURRENCY * WORKER_BATCH_SIZE`, so JetStream does not outpace the worker's current batch-processing capacity
 - Redelivery timing: `ack_wait` is configurable through `NATS_CONSUMER_ACK_WAIT_MS` to keep batch persistence and redelivery timing aligned
+- DLQ path: non-recoverable poison messages are published to `events.dlq.v1` and then `ack`ed so they do not loop forever on the primary consumer
 
 Result: effectively-once persistence, built from at-least-once transport plus idempotent writes.
 
@@ -101,6 +102,24 @@ Result: effectively-once persistence, built from at-least-once transport plus id
 Duplicates are expected and handled by a unique constraint on `event_id`.
 
 Out-of-order events are expected and handled by storing the original event timestamp as `occurred_at` and building reports against event time rather than ingestion order.
+
+## Error Handling And Poison Messages
+
+The Worker uses a simple classification policy:
+
+- transient persistence or infrastructure failures: do not `ack`, rely on JetStream redelivery
+- duplicate inserts: treat as successful idempotent processing and `ack`
+- non-recoverable poison messages such as invalid JSON, schema validation failures, or batched payloads on the single-event worker subject: publish a DLQ envelope to `events.dlq.v1`, then `ack`
+
+Each DLQ envelope includes:
+
+- `requestId`
+- `reason`
+- `subject`
+- `redeliveryCount`
+- `receivedAt`
+- `eventId` when it can be extracted safely
+- the original `rawPayload`
 
 ## Data Model
 
@@ -240,6 +259,7 @@ Current metrics coverage:
   - `mei_worker_messages_inserted_total`
   - `mei_worker_messages_duplicate_total`
   - `mei_worker_processing_failures_total`
+  - `mei_worker_dlq_messages_total`
   - `mei_worker_message_duration_ms_avg`
 - Reports:
   - `mei_reports_requests_total`

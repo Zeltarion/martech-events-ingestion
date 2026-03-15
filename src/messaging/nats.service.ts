@@ -26,17 +26,18 @@ export class NatsService implements OnModuleDestroy {
   public constructor(private readonly configService: ConfigService<{ app: AppConfig }, true>) {}
 
   public async publishEvent(subject: string, event: Event, metadata?: { requestId?: string }): Promise<void> {
-    const jetStream = await this.getJetStreamClient();
-    const natsHeaders = headers();
-
-    if (metadata?.requestId) {
-      natsHeaders.set("x-request-id", metadata.requestId);
-    }
-
-    await jetStream.publish(subject, this.codec.encode(JSON.stringify(event)), {
-      msgID: event.eventId,
-      headers: natsHeaders
+    await this.publishJson(subject, event, {
+      requestId: metadata?.requestId,
+      messageId: event.eventId
     });
+  }
+
+  public async publishDlqMessage(
+    subject: string,
+    payload: unknown,
+    metadata?: { requestId?: string; messageId?: string }
+  ): Promise<void> {
+    await this.publishJson(subject, payload, metadata);
   }
 
   public encodeJson(value: unknown): Uint8Array {
@@ -45,6 +46,24 @@ export class NatsService implements OnModuleDestroy {
 
   public decodeJson<T>(payload: Uint8Array): T {
     return JSON.parse(this.codec.decode(payload)) as T;
+  }
+
+  private async publishJson(
+    subject: string,
+    payload: unknown,
+    metadata?: { requestId?: string; messageId?: string }
+  ): Promise<void> {
+    const jetStream = await this.getJetStreamClient();
+    const natsHeaders = headers();
+
+    if (metadata?.requestId) {
+      natsHeaders.set("x-request-id", metadata.requestId);
+    }
+
+    await jetStream.publish(subject, this.codec.encode(JSON.stringify(payload)), {
+      msgID: metadata?.messageId,
+      headers: natsHeaders
+    });
   }
 
   public async buildConsumerOptions(durableName: string, subject: string) {

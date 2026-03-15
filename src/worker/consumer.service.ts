@@ -9,6 +9,7 @@ import { NatsService } from "../messaging/nats.service";
 import { StreamBootstrapService } from "../messaging/stream.bootstrap";
 import { MetricsService } from "../observability/metrics.service";
 import { EventsRepository } from "../persistence/events.repository";
+import { buildDlqEnvelope, isPoisonMessageError, PoisonMessageError } from "./poison-message";
 
 interface PendingMessage {
   message: JsMsg;
@@ -40,6 +41,7 @@ export class ConsumerService implements OnModuleInit {
     const appConfig = this.configService.getOrThrow("app");
     const durableName = appConfig.natsDurableName;
     const subject = appConfig.natsIngestSubject;
+    const dlqSubject = appConfig.natsDlqSubject;
     const concurrency = appConfig.workerConcurrency;
     const batchSize = appConfig.workerBatchSize;
     const batchFlushMs = appConfig.workerBatchFlushMs;
@@ -50,7 +52,7 @@ export class ConsumerService implements OnModuleInit {
     );
 
     this.logger.log(
-      `Started JetStream consumer ${durableName} subject=${subject} concurrency=${concurrency} batchSize=${batchSize} batchFlushMs=${batchFlushMs}`
+      `Started JetStream consumer ${durableName} subject=${subject} dlqSubject=${dlqSubject} concurrency=${concurrency} batchSize=${batchSize} batchFlushMs=${batchFlushMs}`
     );
 
     void (async () => {
@@ -74,7 +76,7 @@ export class ConsumerService implements OnModuleInit {
       const validatedPayload = validateIngestionPayload(event);
 
       if (Array.isArray(validatedPayload)) {
-        throw new Error("Worker received batched payload on single-event subject");
+        throw new PoisonMessageError("Worker received batched payload on single-event subject");
       }
 
       this.pendingBatch.push({
@@ -88,6 +90,12 @@ export class ConsumerService implements OnModuleInit {
         await this.flushPendingBatch(concurrency);
       }
     } catch (error) {
+      if (isPoisonMessageError(error)) {
+        await this.parkPoisonMessage(message, error);
+        return;
+      }
+
+      this.metricsService.recordWorkerFailure();
       this.logger.error("Failed to process JetStream message", error instanceof Error ? error.stack : undefined);
     }
   }
@@ -120,21 +128,43 @@ export class ConsumerService implements OnModuleInit {
   }
 
   private async processBatch(batch: PendingMessage[]): Promise<void> {
-    const startedAt = Date.now();
-    const insertedEventIds = await this.eventsRepository.insertEvents(batch.map((item) => item.event));
-    this.metricsService.recordWorkerBatch(
-      batch.length,
-      insertedEventIds.size,
-      Date.now() - startedAt
-    );
-
-    for (const item of batch) {
-      item.message.ack();
-      const requestId = item.message.headers?.get("x-request-id") ?? "unknown";
-
-      this.logger.log(
-        `Persisted requestId=${requestId} eventId=${item.event.eventId} inserted=${insertedEventIds.has(item.event.eventId)} redelivery=${item.message.info.redeliveryCount}`
+    try {
+      const startedAt = Date.now();
+      const insertedEventIds = await this.eventsRepository.insertEvents(batch.map((item) => item.event));
+      this.metricsService.recordWorkerBatch(
+        batch.length,
+        insertedEventIds.size,
+        Date.now() - startedAt
       );
+
+      for (const item of batch) {
+        item.message.ack();
+        const requestId = item.message.headers?.get("x-request-id") ?? "unknown";
+
+        this.logger.log(
+          `Persisted requestId=${requestId} eventId=${item.event.eventId} inserted=${insertedEventIds.has(item.event.eventId)} redelivery=${item.message.info.redeliveryCount}`
+        );
+      }
+    } catch (error) {
+      this.metricsService.recordWorkerFailure();
+      this.logger.error("Failed to persist worker batch", error instanceof Error ? error.stack : undefined);
     }
+  }
+
+  private async parkPoisonMessage(message: JsMsg, error: unknown): Promise<void> {
+    const appConfig = this.configService.getOrThrow("app");
+    const envelope = buildDlqEnvelope(message, error);
+
+    await this.natsService.publishDlqMessage(appConfig.natsDlqSubject, envelope, {
+      requestId: envelope.requestId,
+      messageId: `${message.subject}:${envelope.eventId ?? "unknown"}:${message.info.streamSequence}`
+    });
+
+    message.ack();
+    this.metricsService.recordWorkerDlqMessage();
+
+    this.logger.warn(
+      `Moved poison message to DLQ requestId=${envelope.requestId} eventId=${envelope.eventId ?? "unknown"} reason="${envelope.reason}" redelivery=${message.info.redeliveryCount}`
+    );
   }
 }
