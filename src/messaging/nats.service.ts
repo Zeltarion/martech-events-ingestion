@@ -48,6 +48,7 @@ export class NatsService implements OnModuleDestroy {
   }
 
   public async buildConsumerOptions(durableName: string, subject: string) {
+    const appConfig = this.configService.getOrThrow("app");
     const options = consumerOpts();
 
     options.durable(durableName);
@@ -55,9 +56,9 @@ export class NatsService implements OnModuleDestroy {
     options.ackExplicit();
     options.deliverTo(`${durableName}.deliver`);
     options.filterSubject(subject);
-    options.ackWait(30_000);
+    options.ackWait(appConfig.natsConsumerAckWaitMs);
     options.maxDeliver(10);
-    options.maxAckPending(1_000);
+    options.maxAckPending(appConfig.natsConsumerMaxAckPending);
 
     return options;
   }
