@@ -29,9 +29,7 @@ These are the highest-value follow-ups if there is still time after the MVP.
 - Surface JetStream consumer lag or stream depth if operational visibility becomes important.
 - Add more focused Grafana panels or alerts only after real operational questions emerge.
 - Add richer metrics as a lower-priority follow-up:
-  - per-report endpoint counters and latency
   - per-source counters for `facebook` and `tiktok`
-  - worker batch size distribution
   - histogram-style latency metrics instead of averages only
   - database persistence timing and retry visibility
   - alerting rules once dashboards stabilize
@@ -72,6 +70,7 @@ These are legitimate future improvements, but they are not good trade-offs for t
 
 - Add smoke tests covering the full `docker-compose` path.
 - Expand startup retry policies only if local startup or dependency churn proves unstable.
+- Add more local helper scripts only if the current publisher-control commands stop being sufficient.
 
 ## Notes
 
