@@ -116,6 +116,7 @@ Primary table: `raw_events`
 | `event_type` | `text` | Event type from the contract |
 | `user_id` | `text` | Extracted from payload |
 | `country` | `text` | Extracted country, nullable |
+| `purchase_amount` | `numeric` | Extracted numeric purchase amount, nullable |
 | `payload` | `jsonb` | Full raw event |
 | `ingested_at` | `timestamptz` | Default `now()` |
 
@@ -126,6 +127,7 @@ Recommended indexes:
 - `(source, occurred_at)`
 - `(event_type, occurred_at)`
 - `(country, occurred_at)` if geo reports justify it
+- partial `(source, occurred_at)` where `purchase_amount IS NOT NULL` for revenue queries
 
 ## Retention Policy
 
@@ -191,7 +193,7 @@ Example:
 
 Returns revenue aggregation from events that include `purchaseAmount`.
 
-For MVP, numeric string values are aggregated, `null` is ignored, and invalid values must not break report generation. The exact parsing rule should be documented in code and kept deterministic.
+For MVP, numeric string values are extracted into the dedicated `purchase_amount` column during ingestion. `null` and invalid values are ignored, and report queries aggregate the extracted column instead of reparsing `jsonb` on every request.
 
 Example:
 
