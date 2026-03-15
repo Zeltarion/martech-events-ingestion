@@ -26,7 +26,7 @@ export class ReportsService {
     const startedAt = Date.now();
     const result = await this.eventsRepository.getFunnelReport(filters);
     const conversionRate = result.topCount === 0 ? 0 : result.bottomCount / result.topCount;
-    this.metricsService.recordReportRequest(Date.now() - startedAt);
+    this.metricsService.recordReportRequest("funnel", Date.now() - startedAt);
 
     return {
       from: filters.from,
@@ -47,7 +47,7 @@ export class ReportsService {
   }> {
     const startedAt = Date.now();
     const items = await this.eventsRepository.getCountriesReport(filters);
-    this.metricsService.recordReportRequest(Date.now() - startedAt);
+    this.metricsService.recordReportRequest("countries", Date.now() - startedAt);
 
     return {
       from: filters.from,
@@ -71,7 +71,7 @@ export class ReportsService {
     const totalRevenue = items
       .reduce((accumulator, item) => accumulator + Number(item.revenue), 0)
       .toFixed(2);
-    this.metricsService.recordReportRequest(Date.now() - startedAt);
+    this.metricsService.recordReportRequest("revenue", Date.now() - startedAt);
 
     return {
       from: filters.from,

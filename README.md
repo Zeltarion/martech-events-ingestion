@@ -255,24 +255,30 @@ Current metrics coverage:
   - `mei_webhook_publish_failures_total`
   - `mei_webhook_publish_duration_ms_avg`
 - Worker:
+  - `mei_worker_batches_total`
+  - `mei_worker_batch_size_avg`
   - `mei_worker_messages_processed_total`
   - `mei_worker_messages_inserted_total`
   - `mei_worker_messages_duplicate_total`
   - `mei_worker_processing_failures_total`
   - `mei_worker_dlq_messages_total`
-  - `mei_worker_message_duration_ms_avg`
+  - `mei_worker_batch_duration_ms_avg`
 - Reports:
   - `mei_reports_requests_total`
+  - `mei_reports_funnel_requests_total`
+  - `mei_reports_countries_requests_total`
+  - `mei_reports_revenue_requests_total`
   - `mei_reports_duration_ms_avg`
+  - `mei_reports_funnel_duration_ms_avg`
+  - `mei_reports_countries_duration_ms_avg`
+  - `mei_reports_revenue_duration_ms_avg`
 - Process lifecycle:
   - `mei_process_start_time_seconds`
 
 Future metrics that would be useful if the system grows further:
 
 - JetStream consumer lag or stream depth
-- per-report endpoint latency and request counters
 - per-source metrics for `facebook` and `tiktok`
-- batch size distribution for worker flushes
 - histogram-based latency metrics instead of averages only
 - database-level persistence latency and retry visibility
 
@@ -335,12 +341,14 @@ Recommended workflow:
 
 ```bash
 docker compose stop publisher
+npm run dev:publisher:stop
 ```
 
 When another end-to-end verification pass is needed, start it again:
 
 ```bash
 docker compose start publisher
+npm run dev:publisher:start
 ```
 
 If local resource usage needs to be reduced further, lower `WEBHOOK_PUBLISH_CONCURRENCY` and `WORKER_CONCURRENCY` in `.env`.
